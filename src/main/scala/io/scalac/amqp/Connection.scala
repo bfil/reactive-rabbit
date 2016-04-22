@@ -129,6 +129,8 @@ trait Connection {
     */
   def publishDirectly(queue: String): Subscriber[Message]
 
+  def handleRpc(handler: Message => Message): Subscriber[Message]
+
   /** Shutdowns underlying connection.
     * Publishers and subscribers are terminated and notified via `onError`.
     * This method waits for all close operations to complete. */

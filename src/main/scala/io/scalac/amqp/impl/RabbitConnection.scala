@@ -138,8 +138,25 @@ private[amqp] class RabbitConnection(settings: ConnectionSettings) extends Conne
       exchange = exchange)
 
   override def publishDirectly(queue: String) =
-    publish(exchange = "",
-      routingKey = queue)
+    publish(exchange = "", routingKey = queue)
+
+  override def handleRpc(handler: Message => Message) =
+    new Subscriber[Message] {
+      val channel = underlying.createChannel()
+      val delegate = new ExchangeSubscriber(channel, "")
+
+      override def onError(t: Throwable) = delegate.onError(t)
+      override def onSubscribe(s: Subscription) = delegate.onSubscribe(s)
+      override def onComplete() = delegate.onComplete()
+
+      override def onNext(message: Message) =
+        message.replyTo match {
+          case Some(replyTo) => delegate.onNext(Routed(routingKey = replyTo, message = handler(message)))
+          case None => delegate.onError(new RuntimeException("Message is missing the replyTo property"))
+        }
+
+      override def toString = s"ExchangeSubscriber(channel=$channel)"
+    }
 
   override def shutdown() = future(underlying.close())
 
